@@ -35,7 +35,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(rec rec.c )
+add_executable(rec rec.c ev1527_tx.c)
 
 pico_set_program_name(rec "rec")
 pico_set_program_version(rec "0.1")
@@ -60,6 +60,7 @@ target_include_directories(rec PRIVATE
 target_link_libraries(rec 
         hardware_pio
         hardware_gpio
+        pico_multicore
         )
 
 pico_add_extra_outputs(rec)

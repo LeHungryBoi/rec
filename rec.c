@@ -17,9 +17,13 @@
 #include "hardware/clocks.h"
 #include "hardware/irq.h"
 #include "hardware/gpio.h"
+#include "pico/multicore.h"
 
 // PIO 程序头文件 (由 pioasm 从 radio_rx.pio 生成)
 #include "radio_rx.pio.h"
+
+// Core 1: EV1527 发射模拟器 (GPIO 10 输出)
+#include "ev1527_tx.h"
 
 // ==================== 硬件配置 ====================
 
@@ -400,6 +404,11 @@ static void init_hardware(void) {
 int main() {
     init_hardware();
 
+    // 在 Core 1 上启动 EV1527 发射模拟器 (GPIO 10)
+    // 物理上需要用跳线将 GPIO 10 连接到 GPIO 18 (接收引脚)
+    multicore_launch_core1(ev1527_tx_run);
+    printf("[CORE1] EV1527 TX simulator started on GPIO %d\n", EVTX_GPIO_PIN);
+
     // 启动指示: LED 闪烁 3 次
     for (int i = 0; i < 3; i++) {
         gpio_put(LED_PIN, 1);
@@ -413,9 +422,14 @@ int main() {
     printf("========================================\n");
     printf("  EV1527 RF Decoder for RP2040\n");
     printf("  Ported from AVR EV1527 library\n");
-    printf("  GPIO %d @ 125MHz PIO\n", RADIO_GPIO_PIN);
+    printf("  GPIO %d @ 125MHz PIO (RX)\n", RADIO_GPIO_PIN);
     printf("========================================\n");
     printf("System Clock: %lu MHz\n", clock_get_hz(clk_sys) / 1000000);
+    printf("\n");
+    printf("Core 1 TX Simulator:\n");
+    printf("  GPIO %d → EV1527 frames @ T=%d us\n", EVTX_GPIO_PIN, EVTX_T_US);
+    printf("  Address: 0x%05lX, Keys: 0..%d\n", (uint32_t)EVTX_DEFAULT_ADDRESS, EVTX_KEY_COUNT - 1);
+    printf("  (Connect GPIO %d ←→ GPIO %d with a wire)\n", EVTX_GPIO_PIN, RADIO_GPIO_PIN);
     printf("\n");
     printf("Protocol: EV1527 (24-bit)\n");
     printf("  - 20-bit Address + 4-bit Key/Button\n");
