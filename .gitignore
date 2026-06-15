@@ -1,0 +1,18 @@
+# Build directory
+build/
+
+# IDE files
+.vscode/
+
+# CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+
+# Pico SDK
+pico-sdk/
+
+# OS files
+.DS_Store
+Thumbs.db

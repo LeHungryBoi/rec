@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>433MHz Signal Capture Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .controls {
+            margin: 20px 0;
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 0 10px;
+            font-size: 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        input {
+            padding: 10px;
+            margin: 0 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            min-width: 220px;
+        }
+        #connectBtn {
+            background-color: #2196F3;
+        }
+        #connectBtn:hover {
+            background-color: #0b7dda;
+        }
+        #clearBtn {
+            background-color: #f44336;
+        }
+        #clearBtn:hover {
+            background-color: #da190b;
+        }
+        #status {
+            margin: 10px 0;
+            padding: 10px;
+            text-align: center;
+            border-radius: 4px;
+        }
+        #status.connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        #status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        canvas {
+            width: 100%;
+            height: 400px;
+            border: 1px solid #ddd;
+            margin-top: 20px;
+        }
+        .info {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>433MHz Signal Capture Viewer</h1>
+        
+        <div class="controls">
+                <button id="connectBtn">Connect to device</button>
+                <button id="clearBtn" disabled>Clear Waveforms</button>
+                <input id="messageInput" type="text" placeholder="Type PING or text" />
+                <button id="sendBtn" disabled>Send</button>
+            </div>
+            
+            <div id="status" class="disconnected">Not connected to device</div>
+        <canvas id="waveformCanvas"></canvas>
+        
+        <div class="info">
+            <p><strong>Instructions:</strong></p>
+            <ul>
+                <li>Upload the Pico code to your device</li>
+                <li>Press "Connect to device" and select your Pico serial port</li>
+                <li>Press buttons on your 433MHz remote control</li>
+                <li>Each captured signal will be displayed as a waveform with different colors</li>
+                <li>Waveforms are vertically offset for easy comparison</li>
+            </ul>
+            <p><strong>Note:</strong> This requires Chrome or Edge version 89+ with Web Serial API support.</p>
+        </div>
+    </div>
+
+    <script>
+        // Canvas setup
+        const canvas = document.getElementById('waveformCanvas');
+        const ctx = canvas.getContext('2d');
+        let capturedSignals = [];
+        const colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan'];
+        
+        // Resize canvas to fit container
+        function resizeCanvas() {
+            const displayWidth = canvas.clientWidth;
+            const displayHeight = canvas.clientHeight;
+            
+            if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+                canvas.width = displayWidth;
+                canvas.height = displayHeight;
+                drawWaveforms();
+            }
+        }
+        
+        // Draw all captured waveforms
+        function drawWaveforms() {
+            if (!canvas.width || !canvas.height) return;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (capturedSignals.length === 0) {
+                ctx.fillStyle = '#999';
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('No signals captured yet. Press a remote button!', canvas.width / 2, canvas.height / 2);
+                return;
+            }
+            
+            const maxHeight = canvas.height;
+            const verticalSpacing = 60;
+            const yOffset = 20;
+            
+            capturedSignals.forEach((signal, index) => {
+                const color = colors[index % colors.length];
+                const y = yOffset + (index * verticalSpacing);
+                
+                if (y + 30 > maxHeight) return; // Don't draw if it would go off canvas
+                
+                // Draw signal label
+                ctx.fillStyle = color;
+                ctx.font = '14px Arial';
+                ctx.textAlign = 'left';
+                ctx.fillText(`Signal ${index + 1}`, 10, y + 15);
+                
+                // Draw waveform
+                let x = 50;
+                let currentLevel = 1; // Start with high level (assuming first pulse is high)
+                const scale = Math.min(0.1, canvas.width / (signal.totalTime * 1.1)); // Scale to fit
+                
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(x, y + 20);
+                
+                signal.pulses.forEach((duration, i) => {
+                    const width = duration * scale;
+                    if (currentLevel === 1) {
+                        // High level - draw horizontal line at y+10
+                        ctx.lineTo(x + width, y + 10);
+                        // Vertical drop to low level
+                        ctx.lineTo(x + width, y + 30);
+                    } else {
+                        // Low level - draw horizontal line at y+30
+                        ctx.lineTo(x + width, y + 30);
+                        // Vertical rise to high level
+                        ctx.lineTo(x + width, y + 10);
+                    }
+                    x += width;
+                    currentLevel = 1 - currentLevel; // Toggle level
+                });
+                
+                ctx.stroke();
+            });
+        }
+        
+        // Serial communication variables
+        let port = null;
+        let reader = null;
+        let writer = null;
+        let buffer = '';
+        
+        // DOM elements
+        const connectButton = document.getElementById('connectBtn');
+        const clearButton = document.getElementById('clearBtn');
+        const statusDiv = document.getElementById('status');
+        
+        // Update connection status
+        function updateStatus(connected, message) {
+            statusDiv.textContent = message;
+            statusDiv.className = connected ? 'connected' : 'disconnected';
+            connectButton.textContent = connected ? 'Disconnect' : 'Connect to device';
+            connectButton.disabled = false;
+            sendButton.disabled = !connected;
+            clearButton.disabled = !connected || capturedSignals.length === 0;
+        }
+        
+        // Parse incoming data
+        async function readSerialData() {
+            try {
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) {
+                        console.log('Reader done');
+                        break;
+                    }
+                    
+                    if (value) {
+                        buffer += value;
+                        
+                        // Process complete lines
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop(); // Keep incomplete line in buffer
+                        
+                        for (const line of lines) {
+                            const trimmedLine = line.trim();
+                            if (trimmedLine.startsWith('DATA:') && trimmedLine.endsWith('END')) {
+                                // Parse pulse data
+                                const pulseStr = trimmedLine.substring(5, trimmedLine.length - 3);
+                                const pulses = pulseStr.split(',').map(p => parseInt(p.trim()));
+                                
+                                // Filter out invalid pulses
+                                const validPulses = pulses.filter(p => !isNaN(p) && p > 0);
+                                
+                                if (validPulses.length > 0) {
+                                    const totalTime = validPulses.reduce((sum, p) => sum + p, 0);
+                                    capturedSignals.push({
+                                        pulses: validPulses,
+                                        totalTime: totalTime
+                                    });
+                                    drawWaveforms();
+                                    clearButton.disabled = false;
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error reading serial data:', error);
+                if (port) {
+                    disconnectSerial();
+                }
+            }
+        }
+        
+        // Connect to serial port
+        async function connectSerial() {
+            try {
+                // Request a port without strict filters so the Pico CDC device is selectable
+                port = await navigator.serial.requestPort();
+                
+                // Open the port
+                await port.open({ baudRate: 115200 });
+                
+                // Decode incoming bytes as text
+                const decoderStream = new TextDecoderStream();
+                port.readable.pipeTo(decoderStream.writable);
+                reader = decoderStream.readable.getReader();
+                writer = port.writable.getWriter();
+                
+                // Start reading
+                readSerialData();
+                
+                updateStatus(true, 'Connected to Pico. Ready to capture signals!');
+                
+            } catch (error) {
+                console.error('Error connecting to serial port:', error);
+                updateStatus(false, `Connection failed: ${error.message || 'Unknown error'}`);
+            }
+        }
+        
+        // Send a UTF-8 text message to the serial device
+        async function sendSerialMessage(text) {
+            if (!writer) return;
+            const encoder = new TextEncoder();
+            const data = encoder.encode(text + '\n');
+            await writer.write(data);
+        }
+
+        // Disconnect from serial port
+        async function disconnectSerial() {
+            try {
+                if (reader) {
+                    await reader.cancel();
+                    reader.releaseLock();
+                    reader = null;
+                }
+                
+                if (writer) {
+                    await writer.close();
+                    writer = null;
+                }
+                
+                if (port) {
+                    await port.close();
+                    port = null;
+                }
+                
+                updateStatus(false, 'Disconnected from device');
+            } catch (error) {
+                console.error('Error disconnecting:', error);
+                updateStatus(false, 'Disconnected with error');
+            }
+        }
+        
+        // Clear all captured waveforms
+        function clearWaveforms() {
+            capturedSignals = [];
+            drawWaveforms();
+            clearButton.disabled = true;
+        }
+        
+        // Event listeners
+        connectButton.addEventListener('click', async () => {
+            if (port) {
+                await disconnectSerial();
+            } else {
+                connectButton.disabled = true;
+                await connectSerial();
+            }
+        });
+        
+        sendButton.addEventListener('click', async () => {
+            const message = messageInput.value.trim();
+            if (!message || !writer) return;
+            await sendSerialMessage(message);
+            messageInput.value = '';
+        });
+        
+        clearButton.addEventListener('click', clearWaveforms);
+        
+        // Initialize
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        
+        // Check for Web Serial API support
+        if (!('serial' in navigator)) {
+            updateStatus(false, 'Web Serial API not supported. Please use Chrome or Edge version 89+');
+            connectButton.disabled = true;
+        }
+    </script>
+</body>
+</html>
