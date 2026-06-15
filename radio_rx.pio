@@ -1,0 +1,73 @@
+;
+; radio_rx.pio - 433MHz 射频接收脉冲宽度测量
+;
+; 交替测量 GPIO 引脚上高电平和低电平的持续时间
+; 每次测量结果通过 push 送入 RX FIFO
+;
+; 数据格式 (32-bit):
+;   bit31      = 电平标记 (1=高电平, 0=低电平)
+;   bit30:0    = 脉冲宽度 (以 2 个时钟周期为单位)
+;
+; 时钟: 125MHz 不分频
+;
+
+.program radio_rx
+
+.wrap_target
+    ; ======= 测量高电平脉冲 =======
+    wait 1 pin 0               ; [0] 等待上升沿
+
+    mov y, null                ; [1] y = 0 (递减时从 0xFFFFFFFF 开始)
+
+high_loop:
+    jmp pin high_dec           ; [2] 引脚仍为高?
+    jmp high_done              ; [3] 引脚变低, 结束
+
+high_dec:
+    jmp y-- high_loop          ; [4] 递减计数并继续
+
+high_done:
+    ; ISR = ~y = 计数值, 然后在 bit31 设电平标记
+    mov isr, ::y               ; [5] ISR = ~y (取反得到计数值)
+    set x, 1                   ; [6] 高电平标记 = 1
+    in x, 1                    ; [7] bit31 = 1, ISR 右移1位
+    push noblock               ; [8] 推入 RX FIFO
+
+    ; ======= 测量低电平脉冲 =======
+    wait 0 pin 0               ; [9] 等待下降沿
+
+    mov y, null                ; [10] y = 0 (重置计数器)
+
+low_loop:
+    mov x, pins                ; [11] 读取引脚状态
+    jmp x!=y low_done          ; [12] x!=0 (即引脚变高), 结束低电平
+    jmp y-- low_loop           ; [13] 递减计数并继续
+
+low_done:
+    mov isr, ::y               ; [14] ISR = ~y (取反得到计数值)
+    set x, 0                   ; [15] 低电平标记 = 0
+    in x, 1                    ; [16] bit31 = 0, ISR 右移1位
+    push noblock               ; [17] 推入 RX FIFO
+.wrap
+
+% c-sdk {
+static inline void radio_rx_program_init(PIO pio, uint sm, uint offset, uint pin) {
+    pio_gpio_init(pio, pin);
+
+    pio_sm_config c = pio_get_default_sm_config();
+    sm_config_set_in_pins(&c, pin);
+
+    /* wrap from instruction [0] to instruction [17] */
+    sm_config_set_wrap(&c, offset, offset + 17);
+
+    /* 右移入 ISR, autopush 阈值 32 */
+    sm_config_set_in_shift(&c, true, true, 32);
+    sm_config_set_out_shift(&c, true, false, 32);
+
+    /* 全速 125MHz */
+    sm_config_set_clkdiv(&c, 1.0f);
+
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}

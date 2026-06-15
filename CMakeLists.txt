@@ -40,8 +40,8 @@ add_executable(rec rec.c )
 pico_set_program_name(rec "rec")
 pico_set_program_version(rec "0.1")
 
-# Generate PIO header
-pico_generate_pio_header(rec ${CMAKE_CURRENT_LIST_DIR}/blink.pio)
+# Generate PIO header from radio_rx.pio
+pico_generate_pio_header(rec ${CMAKE_CURRENT_LIST_DIR}/radio_rx.pio)
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(rec 0)
@@ -59,6 +59,7 @@ target_include_directories(rec PRIVATE
 # Add any user requested libraries
 target_link_libraries(rec 
         hardware_pio
+        hardware_gpio
         )
 
 pico_add_extra_outputs(rec)
