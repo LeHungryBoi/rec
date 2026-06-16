@@ -178,15 +178,17 @@ static void decoder_init(decoder_t *d) {
  * ================================================================ */
 
 /* 输入报告包结构 (设备 → 主机)
- * [0]       Report ID = HID_REPORT_ID_RESPONSE (0x02)
- * [1]       Flags: bit7=has_more, bit6:0=sequence
- * [2]       本包数据长度 (0~61)
- * [3..63]   数据载荷
+ * Report ID is passed separately to tud_hid_n_report(); do not include it
+ * in the payload buffer. WebHID also strips the report ID before exposing
+ * event.data, so capture_viewer.html sees exactly this payload layout:
+ * [0]       Flags: bit7=has_more, bit6:0=sequence
+ * [1]       本包数据长度 (0~62)
+ * [2..63]   数据载荷
  */
 #define HID_PKT_FLAG_MORE   0x80
 #define HID_PKT_SEQ_MASK    0x7F
-#define HID_PKT_DATA_MAX    61
-#define HID_PKT_HEADER      3
+#define HID_PKT_DATA_MAX    62
+#define HID_PKT_HEADER      2
 
 /* 发送缓冲: 用于 printf 风格输出后刷新到 HID */
 #define TX_BUF_SIZE         512
@@ -226,17 +228,15 @@ static bool hid_flush(void) {
 
         uint8_t report[REPORT_PACKET_SIZE];
         memset(report, 0, REPORT_PACKET_SIZE);
-        report[0] = HID_REPORT_ID_RESPONSE;
-
         int chunk = total - offset;
         if (chunk > HID_PKT_DATA_MAX) chunk = HID_PKT_DATA_MAX;
 
-        report[1] = (uint8_t)(seq & HID_PKT_SEQ_MASK);
+        report[0] = (uint8_t)(seq & HID_PKT_SEQ_MASK);
         if (offset + chunk < total) {
-            report[1] |= HID_PKT_FLAG_MORE;  /* 还有后续包 */
+            report[0] |= HID_PKT_FLAG_MORE;  /* 还有后续包 */
         }
-        report[2] = (uint8_t)chunk;
-        memcpy(&report[3], tx_buffer + offset, chunk);
+        report[1] = (uint8_t)chunk;
+        memcpy(&report[2], tx_buffer + offset, chunk);
 
         if (!tud_hid_n_report(0, HID_REPORT_ID_RESPONSE, report, REPORT_PACKET_SIZE)) {
             ok = false;
