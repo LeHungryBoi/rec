@@ -35,7 +35,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(rec rec.c ev1527_tx.c)
+add_executable(rec rec.c ev1527_tx.c usb_descriptors.c)
 
 pico_set_program_name(rec "rec")
 pico_set_program_version(rec "0.1")
@@ -43,9 +43,9 @@ pico_set_program_version(rec "0.1")
 # Generate PIO header from radio_rx.pio
 pico_generate_pio_header(rec ${CMAKE_CURRENT_LIST_DIR}/radio_rx.pio)
 
-# Modify the below lines to enable/disable output over UART/USB
-pico_enable_stdio_uart(rec 0)
-pico_enable_stdio_usb(rec 1)
+# Disable both UART and USB stdio — we use raw TinyUSB HID instead
+#pico_enable_stdio_uart(rec 0)
+#pico_enable_stdio_usb(rec 0)
 
 # Add the standard library to the build
 target_link_libraries(rec
@@ -58,9 +58,13 @@ target_include_directories(rec PRIVATE
 
 # Add any user requested libraries
 target_link_libraries(rec 
+        pico_multicore
+        pico_stdlib
+        tinyusb_device
+        tinyusb_board
         hardware_pio
         hardware_gpio
-        pico_multicore
+        hardware_watchdog
         )
 
 pico_add_extra_outputs(rec)

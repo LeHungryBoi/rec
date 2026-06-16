@@ -1,368 +1,589 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>433MHz Signal Capture Viewer</title>
+    <title>433MHz Signal Capture Viewer (HID)</title>
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Arial, sans-serif;
             margin: 20px;
-            background-color: #f5f5f5;
+            background: linear-gradient(135deg, #e8edf5 0%, #dce3ed 100%);
+            min-height: 100vh;
         }
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            background-color: #ffffff;
+            padding: 28px 32px;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.10);
         }
         h1 {
-            color: #333;
+            color: #1a1a2e;
             text-align: center;
+            font-size: 26px;
+            margin-bottom: 6px;
+            letter-spacing: -0.3px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #667;
+            font-size: 13px;
+            margin-bottom: 22px;
         }
         .controls {
-            margin: 20px 0;
-            text-align: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
         }
         button {
-            padding: 10px 20px;
-            margin: 0 10px;
-            font-size: 16px;
+            padding: 10px 22px;
+            font-size: 15px;
+            font-weight: 600;
             border: none;
-            border-radius: 4px;
+            border-radius: 6px;
             cursor: pointer;
-            background-color: #4CAF50;
-            color: white;
+            transition: background-color 0.18s, transform 0.08s, box-shadow 0.18s;
+            color: #fff;
+            letter-spacing: 0.2px;
         }
-        button:hover {
-            background-color: #45a049;
-        }
+        button:active { transform: scale(0.97); }
         button:disabled {
-            background-color: #cccccc;
+            opacity: 0.45;
             cursor: not-allowed;
-        }
-        input {
-            padding: 10px;
-            margin: 0 10px;
-            font-size: 16px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            min-width: 220px;
+            transform: none;
         }
         #connectBtn {
-            background-color: #2196F3;
+            background-color: #2563eb;
+            box-shadow: 0 2px 8px rgba(37,99,235,0.30);
         }
-        #connectBtn:hover {
-            background-color: #0b7dda;
+        #connectBtn:hover:not(:disabled) {
+            background-color: #1d4ed8;
         }
         #clearBtn {
-            background-color: #f44336;
+            background-color: #dc2626;
+            box-shadow: 0 2px 8px rgba(220,38,38,0.30);
         }
-        #clearBtn:hover {
-            background-color: #da190b;
+        #clearBtn:hover:not(:disabled) {
+            background-color: #b91c1c;
+        }
+        #sendBtn {
+            background-color: #059669;
+            box-shadow: 0 2px 8px rgba(5,150,105,0.30);
+        }
+        #sendBtn:hover:not(:disabled) {
+            background-color: #047857;
+        }
+        #rawBtn {
+            background-color: #7c3aed;
+            box-shadow: 0 2px 8px rgba(124,58,237,0.30);
+        }
+        #rawBtn:hover:not(:disabled) {
+            background-color: #6d28d9;
+        }
+        input {
+            padding: 10px 14px;
+            font-size: 15px;
+            border: 1.5px solid #d1d5db;
+            border-radius: 6px;
+            min-width: 220px;
+            outline: none;
+            transition: border-color 0.18s;
+        }
+        input:focus {
+            border-color: #2563eb;
         }
         #status {
-            margin: 10px 0;
-            padding: 10px;
+            margin: 0 0 16px 0;
+            padding: 10px 16px;
             text-align: center;
-            border-radius: 4px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 14px;
+            transition: background-color 0.2s;
         }
         #status.connected {
-            background-color: #d4edda;
-            color: #155724;
+            background-color: #dcfce7;
+            color: #166534;
         }
         #status.disconnected {
-            background-color: #f8d7da;
-            color: #721c24;
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+        .canvas-wrapper {
+            position: relative;
+            width: 100%;
+            margin-top: 12px;
+            border: 1.5px solid #e5e7eb;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #fafbfc;
         }
         canvas {
+            display: block;
             width: 100%;
-            height: 400px;
-            border: 1px solid #ddd;
-            margin-top: 20px;
+            height: 420px;
         }
         .info {
             margin-top: 20px;
-            padding: 10px;
-            background-color: #e9ecef;
-            border-radius: 4px;
+            padding: 16px 20px;
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
             font-size: 14px;
+            color: #334155;
+            line-height: 1.65;
+        }
+        .info strong { color: #1a1a2e; }
+        .info ul { margin: 6px 0 0 18px; }
+        .info li { margin: 2px 0; }
+        .log-area {
+            margin-top: 16px;
+            padding: 10px 14px;
+            background-color: #0f172a;
+            border-radius: 8px;
+            font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+            font-size: 12px;
+            color: #a5f3fc;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>433MHz Signal Capture Viewer</h1>
-        
+        <div class="subtitle">USB HID &mdash; EV1527 RF Decoder for RP2040</div>
+
         <div class="controls">
-                <button id="connectBtn">Connect to device</button>
-                <button id="clearBtn" disabled>Clear Waveforms</button>
-                <input id="messageInput" type="text" placeholder="Type PING or text" />
-                <button id="sendBtn" disabled>Send</button>
-            </div>
-            
-            <div id="status" class="disconnected">Not connected to device</div>
-        <canvas id="waveformCanvas"></canvas>
-        
-        <div class="info">
-            <p><strong>Instructions:</strong></p>
-            <ul>
-                <li>Upload the Pico code to your device</li>
-                <li>Press "Connect to device" and select your Pico serial port</li>
-                <li>Press buttons on your 433MHz remote control</li>
-                <li>Each captured signal will be displayed as a waveform with different colors</li>
-                <li>Waveforms are vertically offset for easy comparison</li>
-            </ul>
-            <p><strong>Note:</strong> This requires Chrome or Edge version 89+ with Web Serial API support.</p>
+            <button id="connectBtn">Connect HID Device</button>
+            <button id="rawBtn" disabled>Raw Mode</button>
+            <button id="clearBtn" disabled>Clear Waveforms</button>
+            <button id="rebootBtn" disabled>Reboot MCU</button>
+            <button id="bootselBtn" disabled>BOOTSEL</button>
+            <input id="messageInput" type="text" placeholder="Type ping / status / led / reset" />
+            <button id="sendBtn" disabled>Send</button>
+        </div>
+
+        <div id="status" class="disconnected">Not connected</div>
+
+        <div class="canvas-wrapper">
+            <canvas id="waveformCanvas"></canvas>
+        </div>
+
+
+
+        <div class="log-area" id="logArea">
+            [*] Ready. Click "Connect HID Device" to start.
         </div>
     </div>
 
     <script>
-        // Canvas setup
-        const canvas = document.getElementById('waveformCanvas');
-        const ctx = canvas.getContext('2d');
-        let capturedSignals = [];
-        const colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan'];
-        
-        // Resize canvas to fit container
-        function resizeCanvas() {
-            const displayWidth = canvas.clientWidth;
-            const displayHeight = canvas.clientHeight;
-            
-            if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
-                canvas.width = displayWidth;
-                canvas.height = displayHeight;
-                drawWaveforms();
-            }
+    /* =============================================================
+     * Canvas & Waveform Rendering
+     * ============================================================= */
+    const canvas = document.getElementById('waveformCanvas');
+    const ctx = canvas.getContext('2d');
+    let capturedSignals = [];
+    const COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6',
+                    '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1'];
+
+    function resizeCanvas() {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        const w = rect.width;
+        const h = rect.height || 420;
+        if (canvas.width !== w || canvas.height !== h) {
+            canvas.width = w;
+            canvas.height = h;
+            drawAll();
         }
-        
-        // Draw all captured waveforms
-        function drawWaveforms() {
-            if (!canvas.width || !canvas.height) return;
-            
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            if (capturedSignals.length === 0) {
-                ctx.fillStyle = '#999';
-                ctx.font = '16px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText('No signals captured yet. Press a remote button!', canvas.width / 2, canvas.height / 2);
-                return;
-            }
-            
-            const maxHeight = canvas.height;
-            const verticalSpacing = 60;
-            const yOffset = 20;
-            
-            capturedSignals.forEach((signal, index) => {
-                const color = colors[index % colors.length];
-                const y = yOffset + (index * verticalSpacing);
-                
-                if (y + 30 > maxHeight) return; // Don't draw if it would go off canvas
-                
-                // Draw signal label
-                ctx.fillStyle = color;
-                ctx.font = '14px Arial';
-                ctx.textAlign = 'left';
-                ctx.fillText(`Signal ${index + 1}`, 10, y + 15);
-                
-                // Draw waveform
-                let x = 50;
-                let currentLevel = 1; // Start with high level (assuming first pulse is high)
-                const scale = Math.min(0.1, canvas.width / (signal.totalTime * 1.1)); // Scale to fit
-                
-                ctx.strokeStyle = color;
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.moveTo(x, y + 20);
-                
-                signal.pulses.forEach((duration, i) => {
-                    const width = duration * scale;
-                    if (currentLevel === 1) {
-                        // High level - draw horizontal line at y+10
-                        ctx.lineTo(x + width, y + 10);
-                        // Vertical drop to low level
-                        ctx.lineTo(x + width, y + 30);
-                    } else {
-                        // Low level - draw horizontal line at y+30
-                        ctx.lineTo(x + width, y + 30);
-                        // Vertical rise to high level
-                        ctx.lineTo(x + width, y + 10);
-                    }
-                    x += width;
-                    currentLevel = 1 - currentLevel; // Toggle level
-                });
-                
-                ctx.stroke();
-            });
-        }
-        
-        // Serial communication variables
-        let port = null;
-        let reader = null;
-        let writer = null;
-        let buffer = '';
-        
-        // DOM elements
-        const connectButton = document.getElementById('connectBtn');
-        const clearButton = document.getElementById('clearBtn');
-        const statusDiv = document.getElementById('status');
-        
-        // Update connection status
-        function updateStatus(connected, message) {
-            statusDiv.textContent = message;
-            statusDiv.className = connected ? 'connected' : 'disconnected';
-            connectButton.textContent = connected ? 'Disconnect' : 'Connect to device';
-            connectButton.disabled = false;
-            sendButton.disabled = !connected;
-            clearButton.disabled = !connected || capturedSignals.length === 0;
-        }
-        
-        // Parse incoming data
-        async function readSerialData() {
-            try {
-                while (true) {
-                    const { value, done } = await reader.read();
-                    if (done) {
-                        console.log('Reader done');
-                        break;
-                    }
-                    
-                    if (value) {
-                        buffer += value;
-                        
-                        // Process complete lines
-                        const lines = buffer.split('\n');
-                        buffer = lines.pop(); // Keep incomplete line in buffer
-                        
-                        for (const line of lines) {
-                            const trimmedLine = line.trim();
-                            if (trimmedLine.startsWith('DATA:') && trimmedLine.endsWith('END')) {
-                                // Parse pulse data
-                                const pulseStr = trimmedLine.substring(5, trimmedLine.length - 3);
-                                const pulses = pulseStr.split(',').map(p => parseInt(p.trim()));
-                                
-                                // Filter out invalid pulses
-                                const validPulses = pulses.filter(p => !isNaN(p) && p > 0);
-                                
-                                if (validPulses.length > 0) {
-                                    const totalTime = validPulses.reduce((sum, p) => sum + p, 0);
-                                    capturedSignals.push({
-                                        pulses: validPulses,
-                                        totalTime: totalTime
-                                    });
-                                    drawWaveforms();
-                                    clearButton.disabled = false;
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('Error reading serial data:', error);
-                if (port) {
-                    disconnectSerial();
-                }
-            }
-        }
-        
-        // Connect to serial port
-        async function connectSerial() {
-            try {
-                // Request a port without strict filters so the Pico CDC device is selectable
-                port = await navigator.serial.requestPort();
-                
-                // Open the port
-                await port.open({ baudRate: 115200 });
-                
-                // Decode incoming bytes as text
-                const decoderStream = new TextDecoderStream();
-                port.readable.pipeTo(decoderStream.writable);
-                reader = decoderStream.readable.getReader();
-                writer = port.writable.getWriter();
-                
-                // Start reading
-                readSerialData();
-                
-                updateStatus(true, 'Connected to Pico. Ready to capture signals!');
-                
-            } catch (error) {
-                console.error('Error connecting to serial port:', error);
-                updateStatus(false, `Connection failed: ${error.message || 'Unknown error'}`);
-            }
-        }
-        
-        // Send a UTF-8 text message to the serial device
-        async function sendSerialMessage(text) {
-            if (!writer) return;
-            const encoder = new TextEncoder();
-            const data = encoder.encode(text + '\n');
-            await writer.write(data);
+    }
+
+    function drawAll() {
+        if (!canvas.width || !canvas.height) return;
+        const W = canvas.width, H = canvas.height;
+
+        ctx.clearRect(0, 0, W, H);
+
+        if (capturedSignals.length === 0) {
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '15px "Segoe UI", Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('No signals captured yet — press a remote button!', W / 2, H / 2);
+            return;
         }
 
-        // Disconnect from serial port
-        async function disconnectSerial() {
+        const vSpacing = 62;
+        const yBase = 22;
+
+        capturedSignals.forEach((sig, idx) => {
+            const y = yBase + idx * vSpacing;
+            if (y + 28 > H) return;
+
+            const color = COLORS[idx % COLORS.length];
+
+            /* label */
+            ctx.fillStyle = color;
+            ctx.font = 'bold 13px "Segoe UI", Arial, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('Signal ' + (idx + 1), 8, y + 14);
+
+            /* waveform */
+            const margin = 55;
+            const avail = W - margin - 10;
+            const total = sig.totalTime || 1;
+            const scale = Math.min(0.12, avail / (total * 1.06));
+            let x = margin;
+            let level = 1;  /* 1 = high, 0 = low */
+
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2.2;
+            ctx.lineJoin = 'round';
+            ctx.beginPath();
+            ctx.moveTo(x, y + 26);
+
+            sig.pulses.forEach(dur => {
+                const w = dur * scale;
+                if (level) {
+                    ctx.lineTo(x + w, y + 10);
+                    ctx.lineTo(x + w, y + 36);
+                } else {
+                    ctx.lineTo(x + w, y + 36);
+                    ctx.lineTo(x + w, y + 10);
+                }
+                x += w;
+                level = 1 - level;
+            });
+            ctx.stroke();
+        });
+    }
+
+    /* =============================================================
+     * HID Transport
+     * ============================================================= */
+
+    const HID_VID        = 0xCAFE;
+    const HID_PID        = 0x4005;
+    const REPORT_OUT     = 1;   /* Output report ID (host -> device) */
+    const REPORT_IN      = 2;   /* Input  report ID (device -> host) */
+    const REPORT_SIZE    = 64;
+    const HDR_FLAGS      = 0;   /* event.data[0] = flags (report ID already stripped by browser) */
+    const HDR_LEN        = 1;   /* event.data[1] = payload length */
+    const HDR_DATA       = 2;   /* event.data[2..] = payload */
+    const FLAG_MORE      = 0x80;
+    const DATA_MAX       = 61;
+
+    let hidDevice = null;
+    let pendingChunks = [];   /* accumulated payload buffers */
+    let pendingLines  = '';   /* incomplete line buffer */
+
+    /* DOM */
+    const connectBtn  = document.getElementById('connectBtn');
+    const rawBtn      = document.getElementById('rawBtn');
+    const clearBtn    = document.getElementById('clearBtn');
+    const rebootBtn   = document.getElementById('rebootBtn');
+    const bootselBtn  = document.getElementById('bootselBtn');
+    const sendBtn     = document.getElementById('sendBtn');
+    const msgInput    = document.getElementById('messageInput');
+    const statusDiv   = document.getElementById('status');
+    const logArea     = document.getElementById('logArea');
+
+    let rawModeActive = false;
+
+    function log(msg) {
+        logArea.textContent += msg + '\n';
+        logArea.scrollTop = logArea.scrollHeight;
+    }
+
+    function setConnected(connected, text) {
+        statusDiv.textContent = text;
+        statusDiv.className = connected ? 'connected' : 'disconnected';
+        connectBtn.textContent = connected ? 'Disconnect' : 'Connect HID Device';
+        connectBtn.disabled = false;
+        sendBtn.disabled = !connected;
+        rawBtn.disabled = !connected;
+        rebootBtn.disabled = !connected;
+        bootselBtn.disabled = !connected;
+        clearBtn.disabled = !connected || capturedSignals.length === 0;
+        if (!connected) {
+            rawModeActive = false;
+            rawBtn.textContent = 'Raw Mode';
+        }
+    }
+
+    function processReceivedText(text) {
+        pendingLines += text;
+
+        const lines = pendingLines.split('\n');
+        pendingLines = lines.pop() || '';
+
+        for (const line of lines) {
+            const t = line.trim();
+            if (!t) continue;
+
+            /* log all non-DATA lines */
+            if (!t.startsWith('DATA:')) {
+                log('[DEV] ' + t);
+                continue;
+            }
+
+            /* parse DATA:xxxx,...xxxx,END */
+            if (t.startsWith('DATA:') && t.endsWith('END')) {
+                const inner = t.substring(5, t.length - 3);
+                const nums = inner.split(',').map(s => parseInt(s.trim(), 10));
+                const valid = nums.filter(n => !isNaN(n) && n > 0);
+
+                if (valid.length > 0) {
+                    const total = valid.reduce((a, b) => a + b, 0);
+                    capturedSignals.push({ pulses: valid, totalTime: total });
+                    drawAll();
+                    clearBtn.disabled = false;
+                    log('[RAW] Captured signal #' + capturedSignals.length +
+                         ' (' + valid.length + ' pulses, ' + total + ' us)');
+                }
+            }
+        }
+    }
+
+    function handleInputReport(event) {
+        if (event.reportId !== REPORT_IN) return;
+
+        /* use event.data directly — it is already a DataView sized to the
+         * report payload (report ID stripped by the browser). */
+        const dv = event.data;
+        if (dv.byteLength < HDR_DATA + 1) {
+            log('[HID] report too short: ' + dv.byteLength + ' bytes');
+            console.log('[HID RX] short report', {
+                reportId: event.reportId,
+                byteLength: dv.byteLength
+            });
+            return;
+        }
+
+        const rawBytes = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+        const flags  = dv.getUint8(HDR_FLAGS);
+        const length = dv.getUint8(HDR_LEN);
+        log('[HID] IN report: flags=0x' + flags.toString(16) +
+            ' len=' + length + ' total=' + dv.byteLength);
+        console.log('[HID RX] input report', {
+            reportId: event.reportId,
+            byteLength: dv.byteLength,
+            flags: flags,
+            length: length,
+            bytes: Array.from(rawBytes)
+        });
+
+        if (length === 0 || length > DATA_MAX) {
+            log('[HID] dropped: invalid length ' + length);
+            console.log('[HID RX] dropped invalid length', {
+                reportId: event.reportId,
+                byteLength: dv.byteLength,
+                flags: flags,
+                length: length,
+                bytes: Array.from(rawBytes)
+            });
+            return;
+        }
+
+        const chunk = new Uint8Array(dv.buffer, dv.byteOffset + HDR_DATA, length);
+        pendingChunks.push(chunk);
+
+        if (!(flags & FLAG_MORE)) {
+            /* last chunk — concatenate and process */
+            let totalLen = 0;
+            for (const c of pendingChunks) totalLen += c.length;
+            const full = new Uint8Array(totalLen);
+            let off = 0;
+            for (const c of pendingChunks) {
+                full.set(c, off);
+                off += c.length;
+            }
+            pendingChunks.length = 0;
+
+            const text = new TextDecoder().decode(full);
+            log('[HID] complete message (' + totalLen + ' bytes)');
+            console.log('[HID RX] complete message', text);
+            processReceivedText(text);
+        }
+    }
+
+    async function connectHID() {
+        try {
+            const filters = [
+                { vendorId: HID_VID, productId: HID_PID }
+            ];
+            const devices = await navigator.hid.requestDevice({ filters });
+            if (!devices || devices.length === 0) {
+                setConnected(false, 'No HID device selected');
+                return;
+            }
+            hidDevice = devices[0];
+
+            await hidDevice.open();
+            hidDevice.addEventListener('inputreport', handleInputReport);
+
+            setConnected(true, 'Connected to EV1527 HID Decoder (VID=0x' +
+                          HID_VID.toString(16).toUpperCase() +
+                          ' PID=0x' + HID_PID.toString(16).toUpperCase() + ')');
+            log('[OK] HID device opened');
+
+            /* auto-send a probe to verify the round-trip */
+            await autoProbe();
+
+        } catch (err) {
+            console.error('HID connect error:', err);
+            setConnected(false, 'Connection failed: ' + (err.message || 'Unknown error'));
+            hidDevice = null;
+        }
+    }
+
+    /**
+     * Send a status/ping probe automatically after connection to confirm
+     * the two-way HID pipe is working.  A small delay lets the device finish
+     * its USB enumeration and start-up banner.
+     */
+    async function autoProbe() {
+        /* wait a moment for the device to be ready after usb enumeration */
+        await new Promise(r => setTimeout(r, 800));
+        log('[*] Sending auto-probe (status)...');
+        await sendCommand('status');
+    }
+
+    async function disconnectHID() {
+        try {
+            if (hidDevice) {
+                hidDevice.removeEventListener('inputreport', handleInputReport);
+                await hidDevice.close();
+                hidDevice = null;
+            }
+            pendingChunks.length = 0;
+            pendingLines = '';
+            setConnected(false, 'Disconnected');
+            log('[*] Disconnected');
+        } catch (err) {
+            console.error('HID disconnect error:', err);
+            hidDevice = null;
+            setConnected(false, 'Disconnected with error');
+        }
+    }
+
+    async function sendCommand(text) {
+        if (!hidDevice || !text) return;
+        const enc = new TextEncoder();
+        const bytes = enc.encode(text);
+
+        /* report ID is passed as 1st arg to sendReport(),
+         * must NOT be included in the data buffer. */
+        const len = Math.min(bytes.length, REPORT_SIZE - 2);
+        const report = new Uint8Array(REPORT_SIZE);
+        report[0] = len;
+        report.set(bytes.subarray(0, len), 1);
+
+        try {
+            await hidDevice.sendReport(REPORT_OUT, report);
+            log('[SEND] ' + text);
+        } catch (err) {
+            console.error('sendReport error:', err);
+            log('[ERR] sendReport failed: ' + (err.message || ''));
+        }
+    }
+
+    /* =============================================================
+     * Event Wiring
+     * ============================================================= */
+
+    connectBtn.addEventListener('click', async () => {
+        if (hidDevice) {
+            await disconnectHID();
+        } else {
+            connectBtn.disabled = true;
+            await connectHID();
+        }
+    });
+
+    sendBtn.addEventListener('click', async () => {
+        const msg = msgInput.value.trim();
+        if (!msg) return;
+        await sendCommand(msg);
+        msgInput.value = '';
+    });
+
+    msgInput.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const msg = msgInput.value.trim();
+            if (!msg) return;
+            await sendCommand(msg);
+            msgInput.value = '';
+        }
+    });
+
+    rawBtn.addEventListener('click', async () => {
+        rawModeActive = !rawModeActive;
+        if (rawModeActive) {
+            rawBtn.textContent = 'Decoder Mode';
+            await sendCommand('raw');
+        } else {
+            rawBtn.textContent = 'Raw Mode';
+            await sendCommand('reset');
+        }
+    });
+
+    rebootBtn.addEventListener('click', async () => {
+        await sendCommand('reboot');
+    });
+
+    bootselBtn.addEventListener('click', async () => {
+        await sendCommand('bootsel');
+    });
+
+    clearBtn.addEventListener('click', () => {
+        capturedSignals.length = 0;
+        drawAll();
+        clearBtn.disabled = true;
+        log('[*] Waveforms cleared');
+    });
+
+    /* =============================================================
+     * Init
+     * ============================================================= */
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+    console.log('[HID RX] viewer script loaded');
+
+    if (!('hid' in navigator)) {
+        setConnected(false, 'WebHID API not supported. Please use Chrome or Edge 89+');
+        connectBtn.disabled = true;
+        console.log('[HID RX] WebHID not supported in this browser');
+    } else {
+        /* auto-connect if device already paired */
+        (async () => {
             try {
-                if (reader) {
-                    await reader.cancel();
-                    reader.releaseLock();
-                    reader = null;
+                const devices = await navigator.hid.getDevices();
+                const matched = devices.filter(d => d.vendorId === HID_VID && d.productId === HID_PID);
+                if (matched.length > 0) {
+                    hidDevice = matched[0];
+                    await hidDevice.open();
+                    hidDevice.addEventListener('inputreport', handleInputReport);
+                    setConnected(true, 'Connected to EV1527 HID Decoder (VID=0x' +
+                                  HID_VID.toString(16).toUpperCase() +
+                                  ' PID=0x' + HID_PID.toString(16).toUpperCase() + ')');
+                    log('[OK] Auto-connected to previously paired HID device');
+                    console.log('[HID RX] auto-connected to HID device', hidDevice);
+                    /* auto-send probe on refresh */
+                    await autoProbe();
                 }
-                
-                if (writer) {
-                    await writer.close();
-                    writer = null;
-                }
-                
-                if (port) {
-                    await port.close();
-                    port = null;
-                }
-                
-                updateStatus(false, 'Disconnected from device');
-            } catch (error) {
-                console.error('Error disconnecting:', error);
-                updateStatus(false, 'Disconnected with error');
-            }
-        }
-        
-        // Clear all captured waveforms
-        function clearWaveforms() {
-            capturedSignals = [];
-            drawWaveforms();
-            clearButton.disabled = true;
-        }
-        
-        // Event listeners
-        connectButton.addEventListener('click', async () => {
-            if (port) {
-                await disconnectSerial();
-            } else {
-                connectButton.disabled = true;
-                await connectSerial();
-            }
-        });
-        
-        sendButton.addEventListener('click', async () => {
-            const message = messageInput.value.trim();
-            if (!message || !writer) return;
-            await sendSerialMessage(message);
-            messageInput.value = '';
-        });
-        
-        clearButton.addEventListener('click', clearWaveforms);
-        
-        // Initialize
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
-        
-        // Check for Web Serial API support
-        if (!('serial' in navigator)) {
-            updateStatus(false, 'Web Serial API not supported. Please use Chrome or Edge version 89+');
-            connectButton.disabled = true;
-        }
+            } catch (_) { /* silent — user can click Connect manually */ }
+        })();
+    }
     </script>
 </body>
 </html>
